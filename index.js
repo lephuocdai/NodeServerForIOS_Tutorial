@@ -29,7 +29,7 @@ mongoClient.open(function (err, mongoClient) {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.bodyParser());
 
-// Create request handler
+// RESTful request handler
 app.get('/:collection', function (req, res) {
 	var params = req.params;
 	collectionDriver.findAll(req.params.collection, function (error, objs) {
@@ -67,6 +67,37 @@ app.post('/:collection', function (req, res) {
 		else { res.send(201, docs); }
 	});
 });
+
+app.put('/:collection/:entity', function(req, res) {
+	var params = req.params;
+	var entity = params.entity;
+	var collection = params.collection;
+	if (entity) {
+		collectionDriver.update(collection, req.body, entity, function (error, objs) {
+			if (error) { res.send(400, error); } 
+			else { res.send(200, objs); }
+		});
+	} else {
+		var error = { "message" : "Cannot PUT a whole collection"};
+		res.send(400, error);
+	}
+});
+
+app.delete('/:collection/:entity', function (req, res) {
+	var params = req.params;
+	var entity = params.entity;
+	var collection = params.collection;
+	if (entity) {
+		collectionDriver.delete(collection, entity, function (error, objs) {
+			if (error) { res.send(400, error); } 
+			else { res.send(200, objs); }
+		});
+	} else{
+		var error = { "message" : "Cannot DELETE a whole collection"};
+		res.send(400, objs);
+	}
+});
+
 
 
 /* This is for test
