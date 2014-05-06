@@ -4,7 +4,8 @@ var http = require('http'),
 	path = require('path'),
 	MongoClient = require('mongodb').MongoClient,
 	Server = require('mongodb').Server,
-	CollectionDriver = require('./CollectionDriver').CollectionDriver;
+	CollectionDriver = require('./collectionDriver').CollectionDriver,
+	FileDriver = require('./fileDriver').FileDriver;
 
 // Setting app
 var app = express();
@@ -15,6 +16,7 @@ app.set('view engine', 'jade');
 var mongoHost = 'localHost';
 var mongoPort = 27017;
 var collectionDriver;
+var fileDriver;
 
 var mongoClient = new MongoClient(new Server(mongoHost, mongoPort));
 mongoClient.open(function (err, mongoClient) {
@@ -24,12 +26,25 @@ mongoClient.open(function (err, mongoClient) {
 	}
 	var db = mongoClient.db("MyDatabase");
 	collectionDriver = new CollectionDriver(db);
+	fileDriver = new FileDriver(db);
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.bodyParser());
 
 // RESTful request handler
+app.get('/', function (req, res) {
+	res.send('<html><body><h1>Hello World</h1></body></html>');
+});
+// Handler for file
+app.get('/files/:id', function (req, res) {
+	fileDriver.handleGet(req, res);
+});
+
+app.post('/files', function (req, res) {
+	fileDriver.handleUploadRequest(req, res);
+});
+// Hanlder for generic collection
 app.get('/:collection', function (req, res) {
 	var params = req.params;
 	collectionDriver.findAll(req.params.collection, function (error, objs) {
@@ -101,9 +116,6 @@ app.delete('/:collection/:entity', function (req, res) {
 
 
 /* This is for test
-app.get('/', function (req, res) {
-  res.send('<html><body><h1>Hello World</h1></body></html>');
-});
 app.get('/:a?/:b?/:c?', function (req, res){
 	res.send(req.params.a + ' ' + req.params.b + ' ' + req.params.c);
 });
@@ -118,9 +130,6 @@ http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
 });
  
-
-
-
 
 //2 
 // http.createServer(function (req, res) {
