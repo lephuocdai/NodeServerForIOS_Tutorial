@@ -81,7 +81,15 @@ static NSMutableDictionary* categoryMeta;
 }
 
 + (NSString*) query {
-    return nil;
+    NSArray *filterCategories = [self filteredCategories:YES];
+    NSString *query = @"";
+    NSString *legalURLCharacters = @"!*();':@&=+$,/?%#[]{}";
+    if (filterCategories.count > 0) {
+        query = [NSString stringWithFormat:@"{\"categories\":{\"$in\":[%@]}}", [filterCategories componentsJoinedByString:@","]];
+        query = (NSString*)CFBridgingRelease(CFURLCreateStringByAddingPercentEscapes(NULL, (CFStringRef)query, NULL, (CFStringRef)legalURLCharacters, kCFStringEncodingUTF8));
+        query = [@"?query=" stringByAppendingString:query];
+    }
+    return query;
 }
 
 
