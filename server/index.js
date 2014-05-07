@@ -45,20 +45,30 @@ app.post('/files', function (req, res) {
 	fileDriver.handleUploadRequest(req, res);
 });
 // Hanlder for generic collection
-app.get('/:collection', function (req, res) {
-	var params = req.params;
-	collectionDriver.findAll(req.params.collection, function (error, objs) {
-		if (error) { res.send(400, error);} 
-		else {
-			if (req.accepts('html')) {
-				res.render('data', {objects: objs, collection: req.params.collection});
-			} else {
-				res.set('Content-Type', 'application/json');
-				res.send(200, objs);
-			}
-		}
-	});
+app.get('/:collection', function(req, res, next) {  
+   	var params = req.params;
+   	var query = req.query.query; //1
+   	if (query) {
+        query = JSON.parse(query); //2
+        collectionDriver.query(req.params.collection, query, returnCollectionResults(req,res)); //3
+   	} else {
+        collectionDriver.findAll(req.params.collection, returnCollectionResults(req,res)); //4
+   	}
 });
+ 
+function returnCollectionResults(req, res) {
+    return function(error, objs) { //5
+        if (error) { res.send(400, error); }
+	    else { 
+	        if (req.accepts('html')) { //6
+                res.render('data',{objects: objs, collection: req.params.collection});
+            } else {
+                res.set('Content-Type','application/json');
+                res.send(200, objs);
+            }
+		}    
+    };
+};
 
 app.get('/:collection/:entity', function (req, res) {
 	var params = req.params;

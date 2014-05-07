@@ -10,7 +10,7 @@
 #import "Location.h"
 
 static NSString* const kBaseURL = @"http://localhost:3000/";
-//static NSString* const kBaseURL = @"lephuocdaiMacBookPro.local/3000/";
+//static NSString* const kBaseURL = @"http://127.0.0.1.local:3000/";
 static NSString* const kLocations = @"locations";
 static NSString* const kFiles = @"files";
 
@@ -59,7 +59,7 @@ static NSString* const kFiles = @"files";
             if (self.delegate) {
                 [self.delegate modelUpdated];
             }
-        }
+        } else NSLog(@"Error = %@", error.description);
     }];
     
     [task resume];
@@ -96,18 +96,50 @@ static NSString* const kFiles = @"files";
         if (error == nil) {
             NSArray *responseArray = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
             [self parseAndAddLocations:responseArray toArray:_objects];
-        }
+        } else
+            NSLog(@"Error = %@", error.description);
     }];
     
     [dataTask resume];  // Start the task
 }
 
 - (void) runQuery:(NSString *)queryString {
- 
+    NSString *urlStr = [[kBaseURL stringByAppendingPathComponent:kLocations] stringByAppendingPathComponent:queryString];
+    NSURL *url = [NSURL URLWithString:urlStr];
+    
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"GET";
+    [request addValue:@"application/json" forHTTPHeaderField:@"Accept"];
+    
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+    
+    NSURLSessionDataTask *dataTask = [session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error == nil) {
+            [_objects removeAllObjects];
+            NSArray *responseArray = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+            NSLog(@"received %lu items", (unsigned long)responseArray.count);
+            [self parseAndAddLocations:responseArray toArray:_objects];
+        } else
+            NSLog(@"Error = %@", error.description);
+    }];
+    [dataTask resume];
 }
 
 - (void) queryRegion:(MKCoordinateRegion)region {
+    // Note assumes the North East hemisphere. This logic should really check first
+    // Also note that searches across hemisphere lines are not interpreted properly by Mongo
+    CLLocationDegrees x0 = region.center.longitude - region.span.longitudeDelta;
+    CLLocationDegrees x1 = region.center.longitude + region.span.longitudeDelta;
+    CLLocationDegrees y0 = region.center.latitude - region.span.latitudeDelta;
+    CLLocationDegrees y1 = region.center.latitude + region.span.latitudeDelta;
     
+    NSString *boxQuery = [NSString stringWithFormat:@"{\"$geoWithin\":{\"$box\":[[%f, %f],[%f,%f]]}}", x0, y0, x1, y1];
+    NSString *locationInBox = [NSString stringWithFormat:@"{\"location\":%@}", boxQuery];
+    NSString *legalURLCharacters = @"!*();':@&=+$,/?%#[]{}";
+    NSString *escBox = (NSString*)CFBridgingRelease(CFURLCreateStringByAddingPercentEscapes(NULL, (CFStringRef)locationInBox, NULL, (CFStringRef) legalURLCharacters, kCFStringEncodingUTF8));
+    NSString *query = [NSString stringWithFormat:@"?query=%@", escBox];
+    [self runQuery:query];
 }
 
 - (void) persist:(Location*)location{
@@ -134,7 +166,9 @@ static NSString* const kFiles = @"files";
     // Set the PUT or POST request with body and header
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     request.HTTPMethod = (isExistingLocation) ? @"PUT" : @"POST";
-    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:location.toDictionary options:0 error:NULL];
+    NSError *err = nil;
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:location.toDictionary options:0 error:&err];
+    if (err != nil) NSLog(@"Error = %@", err.description);
     [request addValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     
     // Create sesssion
@@ -146,7 +180,7 @@ static NSString* const kFiles = @"files";
         if (!error) {
             NSArray *responseArray = @[[NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]];
             [self parseAndAddLocations:responseArray toArray:_objects];
-        }
+        } else NSLog(@"Error = %@", error.description);
     }];
     
     [dataTask resume];
@@ -171,7 +205,7 @@ static NSString* const kFiles = @"files";
             NSDictionary *responseDict = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
             location.imageId = responseDict[@"_id"];
             [self persist:location];
-        }
+        } else NSLog(@"Error = %@ Response.status = %d", error.description, [(NSHTTPURLResponse*)response statusCode]);
     }];
     [task resume];
 }
